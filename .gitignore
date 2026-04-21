@@ -1,0 +1,11 @@
+__pycache__/
+*.pyc
+venv/
+*:Zone.Identifier
+vec.txt
+sentences_train
+sentences_validation
+sentences_test
+vocab.txt
+bigger.txt
+word2vec_training.txt
