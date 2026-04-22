@@ -8,9 +8,12 @@ import streamlit as st
 import torch
 import numpy as np
 import math
+import json
 
-from data import load_embeddings, EMBEDDING_DIM, CONTEXT_SIZE
 from model import build_model
+
+EMBEDDING_DIM = 100
+CONTEXT_SIZE = 2
 
 # ── Page config ───────────────────────────────────────────────────────────────
 
@@ -24,7 +27,16 @@ st.set_page_config(
 
 @st.cache_resource
 def load_model():
-    word_to_id, id_to_word, embeddings = load_embeddings("vec.txt")
+    # Load vocab
+    with open("vocab.json") as f:
+        data = json.load(f)
+    word_to_id = data["word_to_id"]
+    id_to_word = {int(k): v for k, v in data["id_to_word"].items()}
+
+    # Load embeddings
+    embeddings = np.load("embeddings.npy")
+
+    # Load model
     vocab_size = len(word_to_id)
     model = build_model(vocab_size, hidden_sizes=[100], activation="tanh")
     model.load_state_dict(
@@ -37,7 +49,6 @@ def load_model():
 # ── Inference helpers ─────────────────────────────────────────────────────────
 
 def get_context_vector(context_words, word_to_id, embeddings):
-    """Build a 200-dim context vector from last 2 words."""
     unk_id = word_to_id["<UNK>"]
     start_id = word_to_id["<START>"]
     context_ids = []
@@ -50,7 +61,6 @@ def get_context_vector(context_words, word_to_id, embeddings):
 
 
 def top_k_predictions(context_vec, model, id_to_word, k=10):
-    """Return top-k (word, probability) predictions."""
     x = torch.tensor(context_vec, dtype=torch.float32).unsqueeze(0)
     probs = model.predict_proba(x)[0].numpy()
     top_ids = np.argsort(-probs)[:k]
@@ -59,7 +69,6 @@ def top_k_predictions(context_vec, model, id_to_word, k=10):
 
 def sample_sentence(seed_words, model, word_to_id, id_to_word,
                     embeddings, max_len=20, temperature=1.0):
-    """Generate a sentence starting from seed words."""
     unk_id = word_to_id["<UNK>"]
     start_id = word_to_id["<START>"]
 
@@ -96,7 +105,6 @@ def sample_sentence(seed_words, model, word_to_id, id_to_word,
 
 
 def sentence_perplexity(sentence, model, word_to_id, id_to_word, embeddings):
-    """Compute perplexity of a given sentence."""
     tokens = sentence.strip().lower().split()
     if not tokens:
         return None
@@ -118,7 +126,6 @@ def sentence_perplexity(sentence, model, word_to_id, id_to_word, embeddings):
         target_id = word_to_id.get(token, unk_id)
         p = probs[target_id]
         total_nll += -math.log2(p + 1e-15)
-
         context_ids = context_ids[1:] + [word_to_id.get(token, unk_id)]
 
     avg_nll = total_nll / len(targets)
@@ -138,12 +145,11 @@ def main():
 
     st.divider()
 
-    # ── Tab layout ─────────────────────────────────────────────────────────
     tab1, tab2, tab3 = st.tabs(
         ["🔮 Next Word Prediction", "✍️ Text Generation", "📊 Sentence Scoring"]
     )
 
-    # ── Tab 1: Next word prediction ────────────────────────────────────────
+    # ── Tab 1 ──────────────────────────────────────────────────────────────
     with tab1:
         st.subheader("Next Word Prediction")
         st.markdown("Enter up to 2 words — the model predicts the most likely next words.")
@@ -167,26 +173,23 @@ def main():
                 st.markdown(f"**Context:** `{' '.join(context)}`")
                 st.markdown("**Top predictions:**")
 
-                words  = [p[0] for p in predictions]
-                probs  = [p[1] for p in predictions]
-                pct    = [f"{p*100:.2f}%" for p in probs]
-
                 import pandas as pd
-                df = pd.DataFrame({"Word": words, "Probability": pct,
-                                   "Score": probs})
+                words = [p[0] for p in predictions]
+                probs = [p[1] for p in predictions]
+                pct   = [f"{p*100:.2f}%" for p in probs]
+
+                df = pd.DataFrame({"Word": words, "Probability": pct, "Score": probs})
                 st.bar_chart(df.set_index("Word")["Score"])
                 st.dataframe(df[["Word", "Probability"]], hide_index=True)
 
-    # ── Tab 2: Text generation ─────────────────────────────────────────────
+    # ── Tab 2 ──────────────────────────────────────────────────────────────
     with tab2:
         st.subheader("Text Generation")
         st.markdown("Provide 1–2 seed words and let the model continue the sentence.")
 
-        seed = st.text_input("Seed words (space-separated)", value="the market")
-        max_len = st.slider("Max new words", 5, 40, 15)
-        temperature = st.slider(
-            "Temperature (higher = more random)", 0.5, 2.0, 1.0, step=0.1
-        )
+        seed        = st.text_input("Seed words (space-separated)", value="the market")
+        max_len     = st.slider("Max new words", 5, 40, 15)
+        temperature = st.slider("Temperature (higher = more random)", 0.5, 2.0, 1.0, step=0.1)
         num_samples = st.slider("Number of samples", 1, 5, 3)
 
         if st.button("Generate", key="generate"):
@@ -202,7 +205,7 @@ def main():
                     )
                     st.markdown(f"**{i+1}.** {sentence}")
 
-    # ── Tab 3: Sentence scoring ────────────────────────────────────────────
+    # ── Tab 3 ──────────────────────────────────────────────────────────────
     with tab3:
         st.subheader("Sentence Perplexity Scoring")
         st.markdown(
@@ -227,15 +230,9 @@ def main():
                     st.caption(sent2)
 
                 if ppl1 < ppl2:
-                    st.success(
-                        f"✅ Sentence A is {ppl2/ppl1:.1f}x more natural "
-                        f"according to the model."
-                    )
+                    st.success(f"✅ Sentence A is {ppl2/ppl1:.1f}x more natural according to the model.")
                 elif ppl2 < ppl1:
-                    st.success(
-                        f"✅ Sentence B is {ppl1/ppl2:.1f}x more natural "
-                        f"according to the model."
-                    )
+                    st.success(f"✅ Sentence B is {ppl1/ppl2:.1f}x more natural according to the model.")
                 else:
                     st.info("Both sentences have equal perplexity.")
 
