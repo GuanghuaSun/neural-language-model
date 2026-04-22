@@ -138,7 +138,7 @@ def main():
     st.title("🧠 Neural Bigram Language Model")
     st.markdown(
         "A PyTorch MLP trained on 10,000 sentences to predict the next word "
-        "using Word2Vec embeddings. Trained for 30 epochs · Test PPL: **452.64**"
+        "using Word2Vec embeddings. Trained on 210K sentences · Test PPL: **327.65**"
     )
 
     word_to_id, id_to_word, embeddings, model = load_model()
@@ -240,7 +240,7 @@ def main():
     st.caption(
         "BigramLM · PyTorch · Word2Vec embeddings (100-dim) · "
         "Vocab: 29,943 · Parameters: 3,044,343 · "
-        "Trained 30 epochs · UCSC CSE 142"
+        "Trained on 210K sentences · UCSC CSE 142"
     )
 
 

@@ -4,8 +4,11 @@ venv/
 *:Zone.Identifier
 vec.txt
 sentences_train
+sentences_train_big
 sentences_validation
 sentences_test
 vocab.txt
 bigger.txt
+bigger_chunk_*
 word2vec_training.txt
+neural_README.md
